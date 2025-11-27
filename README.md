@@ -1,3 +1,3 @@
-tải đủ thư viện trong requirements.txt
+ đủ thư viện trong requirements.txt
 
 test
