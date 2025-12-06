@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
-# Thêm những dòng này vào phần import trên cùng
+import plotly.express as px
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import joblib
@@ -103,7 +103,7 @@ with tab1:
         st.line_chart(df_filtered, height=400)
         
     with col2:
-        st.subheader("🏆 Xếp hạng Tăng trưởng Tổng")
+        st.subheader("Xếp hạng Tăng trưởng Tổng")
         # Tính tổng tăng trưởng
         total_return = (df_filtered.iloc[-1] / df_filtered.iloc[0] - 1) * 100
         total_return = total_return.sort_values(ascending=True)
@@ -118,7 +118,7 @@ with tab1:
 
     st.divider()
     
-    st.subheader("📊 Lợi nhuận chi tiết từng năm (Grouped Bar Chart)")
+    st.subheader("Lợi nhuận chi tiết từng năm (Grouped Bar Chart)")
     
     # 1. Chuẩn bị dữ liệu
     yearly_ret = df_filtered.resample('YE').apply(lambda x: x.iloc[-1] / x.iloc[0] - 1) * 100
@@ -153,7 +153,7 @@ with tab1:
 
 # --- TAB 2: PHÂN TÍCH CHU KỲ (MỚI) ---
 with tab2:
-    st.header("🔍 Hiệu ứng Mùa vụ (Seasonality)")
+    st.header("Hiệu ứng Mùa vụ (Seasonality)")
     st.markdown("Biểu đồ này cho biết lợi nhuận trung bình của các ngân hàng theo từng tháng trong năm.")
     
     # Tính trung bình theo tháng
@@ -207,123 +207,145 @@ with tab4:
         ax_scat.grid(True, linestyle='--')
         st.pyplot(fig_scat)
 
-# --- TAB 5: DỰ BÁO AI (MỚI) ---
+# --- TAB 5: DỰ BÁO TƯƠNG LAI ---
 with tab5:
-    st.header("🤖 Mô hình Dự báo Giá (LSTM)")
+    st.header("🔮 So sánh Mô hình Dự báo")
     
-    # 1. Chọn ngân hàng cần dự báo (Chỉ lấy ngân hàng đầu tiên trong list đã chọn)
     target_bank = selected_banks[0]
-    st.info(f"Đang chạy mô hình dự báo cho mã: **{target_bank}**")
-    
-    # Đường dẫn đến file mô hình (Cấu trúc: Save_model/ACB.VN/...)
-    # Lưu ý: Thêm đuôi .VN nếu tên thư mục của bạn có .VN
-    model_folder = f"Save_model/{target_bank}.VN" 
-    
-    model_path = os.path.join(model_folder, "LSTM.h5")
-    scaler_path = os.path.join(model_folder, "LSTM_scaler.pkl")
-    loss_path = os.path.join(model_folder, "model_loss.json")
-    
-    # Kiểm tra xem file có tồn tại không
-    if os.path.exists(model_path) and os.path.exists(scaler_path):
-        try:
-            # --- LOAD MÔ HÌNH ---
-            model = load_model(model_path)
-            scaler = joblib.load(scaler_path)
+    st.caption(f"Đang hiển thị dữ liệu dự báo cho: **{target_bank}**")
+
+    # Tạo 2 tab con bên trong Tab 5
+    sub_tab_arima, sub_tab_lstm = st.tabs(["📈 ARIMA (Thống kê)", "🧠 LSTM (Deep Learning)"])
+
+    # =========================================================
+    # 1. SUB-TAB ARIMA
+    # =========================================================
+    with sub_tab_arima:
+        # Đường dẫn folder ARIMA (Lưu ý: Tên folder phải khớp với lúc bạn train)
+        # Giả sử bạn lưu ở Save_model_ARIMA/ACB.VN
+        arima_folder = f"Save_model_ARIMA/{target_bank}.VN"
+        
+        csv_path = os.path.join(arima_folder, "dashboard_data.csv")
+        metrics_path = os.path.join(arima_folder, "metrics.json")
+        
+        # Kiểm tra file tồn tại
+        if os.path.exists(csv_path) and os.path.exists(metrics_path):
             
+            # --- PHẦN 1: HIỂN THỊ METRICS (CHỈ SỐ ĐÁNH GIÁ) ---
+            with open(metrics_path, 'r') as f:
+                arima_metrics = json.load(f)
             
-            # --- HIỂN THỊ ĐÁNH GIÁ MÔ HÌNH (METRICS) ---
-            col_ai1, col_ai2 = st.columns([1, 1]) # Chia đôi màn hình
+            st.subheader("1. Độ chính xác mô hình (Trên tập Test)")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("RMSE (Sai số chuẩn)", arima_metrics.get("RMSE", 0))
+            m2.metric("MAE (Sai số tuyệt đối)", arima_metrics.get("MAE", 0))
+            m3.metric("MAPE (Sai số %)", f"{arima_metrics.get('MAPE', 0)}%")
             
-            with col_ai1:
-                st.subheader("📊 Hiệu quả mô hình (Evaluation Metrics)")
+            # --- PHẦN 2: BIỂU ĐỒ DỰ BÁO ---
+            st.subheader("2. Biểu đồ Dự báo Xu hướng")
+            
+            # Đọc file CSV đã chuẩn bị sẵn (Gồm cả History và Forecast)
+            df_arima = pd.read_csv(csv_path)
+            
+            # Vẽ bằng Plotly để đẹp hơn
+            fig_arima = px.line(df_arima, x='Date', y='Close', color='Type',
+                                title=f"Dự báo ARIMA cho {target_bank} (30 ngày tới)",
+                                color_discrete_map={"History": "light blue", "Forecast": "red"})
+            
+            fig_arima.update_traces(line=dict(width=2))
+            fig_arima.update_layout(xaxis_title="Ngày", yaxis_title="Giá (VND)", hovermode="x unified")
+            
+            st.plotly_chart(fig_arima, use_container_width=True)
+            
+            # --- PHẦN 3: BẢNG GIÁ DỰ KIẾN ---
+            with st.expander("Xem chi tiết giá dự báo 5 ngày tới"):
+                df_future_only = df_arima[df_arima['Type'] == 'Forecast'].head(5)
+                st.dataframe(df_future_only[['Date', 'Close']].set_index('Date'))
                 
-                if os.path.exists(loss_path):
-                    with open(loss_path, 'r') as f:
-                        metrics_data = json.load(f)
+        else:
+            st.warning(f"⚠️ Chưa tìm thấy dữ liệu ARIMA cho **{target_bank}**.")
+            st.info(f"Vui lòng chạy file train ARIMA để tạo folder: `{arima_folder}`")
+
+    # =========================================================
+    # 2. SUB-TAB LSTM (ĐÃ CẬP NHẬT: THÊM BIỂU ĐỒ)
+    # =========================================================
+    with sub_tab_lstm:
+        lstm_folder = f"Save_model_LMST/{target_bank}.VN"
+        model_path = os.path.join(lstm_folder, "LSTM.h5")
+        scaler_path = os.path.join(lstm_folder, "LSTM_scaler.pkl")
+        loss_path = os.path.join(lstm_folder, "model_loss.json")
+        result_csv_path = os.path.join(lstm_folder, "lstm_result.csv") # File dữ liệu mới
+        
+        if os.path.exists(model_path) and os.path.exists(scaler_path):
+            try:
+                # Load các file cần thiết
+                model = load_model(model_path)
+                scaler = joblib.load(scaler_path)
+                
+                # --- PHẦN 1: METRICS & DỰ BÁO ---
+                col_lstm1, col_lstm2 = st.columns([1, 1])
+                
+                with col_lstm1:
+                    st.subheader("1. Hiệu quả mô hình")
+                    if os.path.exists(loss_path):
+                        with open(loss_path, 'r') as f:
+                            metrics_data = json.load(f)
+                        if "LSTM" in metrics_data:
+                            data = metrics_data["LSTM"]
+                            m1, m2, m3 = st.columns(3)
+                            m1.metric("R2 Score", f"{data.get('r2', 0):.4f}")
+                            m2.metric("RMSE", f"{data.get('rmse', 0):.0f}")
+                            m3.metric("MAE", f"{data.get('mae', 0):.0f}")
+                
+                with col_lstm2:
+                    st.subheader("2. Dự báo ngày mai")
+                    # (Code dự báo giữ nguyên như cũ)
+                    time_step = 60
+                    if target_bank in df.columns:
+                        data_last_60 = df[target_bank].values[-time_step:].reshape(-1, 1)
+                        data_scaled = scaler.transform(data_last_60)
+                        X_input = data_scaled.reshape(1, time_step, 1)
+                        pred_scaled = model.predict(X_input)
+                        pred_price = scaler.inverse_transform(pred_scaled)[0][0]
+                        last_price = df[target_bank].iloc[-1]
+                        change = pred_price - last_price
+                        pct_change = (change / last_price) * 100
+                        
+                        st.metric(
+                            label="Giá dự kiến",
+                            value=f"{pred_price:,.0f} VND",
+                            delta=f"{change:,.0f} VND ({pct_change:.2f}%)"
+                        )
+
+                # --- PHẦN 3: VẼ BIỂU ĐỒ (MỚI THÊM VÀO) ---
+                st.divider()
+                st.subheader("3. Biểu đồ Kiểm thử (Thực tế vs Dự báo)")
+                
+                if os.path.exists(result_csv_path):
+                    # Đọc file CSV mà Cell 8 vừa tạo
+                    df_lstm_res = pd.read_csv(result_csv_path)
                     
-                    # File json của bạn có dạng: {"LSTM": {"rmse": ..., "mae": ..., "r2": ...}}
-                    if "LSTM" in metrics_data:
-                        data = metrics_data["LSTM"]
-                        
-                        # Hiển thị 3 chỉ số quan trọng
-                        m1, m2, m3 = st.columns(3)
-                        
-                        with m1:
-                            st.metric(label="R2 Score (Độ phù hợp)", 
-                                      value=f"{data.get('r2', 0):.4f}", 
-                                      help="Càng gần 1 càng tốt")
-                        
-                        with m2:
-                            st.metric(label="RMSE (Sai số)", 
-                                      value=f"{data.get('rmse', 0):.0f}", 
-                                      help="Càng thấp càng tốt")
-                                      
-                        with m3:
-                            st.metric(label="MAE (Sai số tuyệt đối)", 
-                                      value=f"{data.get('mae', 0):.0f}")
-                        
-                        # Đánh giá bằng lời văn
-                        r2 = data.get('r2', 0)
-                        if r2 > 0.9:
-                            st.success("✅ Mô hình có độ chính xác RẤT CAO (>90%)")
-                        elif r2 > 0.7:
-                            st.info("ℹ️ Mô hình có độ chính xác KHÁ (>70%)")
-                        else:
-                            st.warning("⚠️ Mô hình có độ chính xác THẤP. Cần train lại.")
-                            
-                    else:
-                        st.warning("File JSON không chứa key 'LSTM'.")
-                        st.json(metrics_data) # In file ra để debug nếu cần
+                    # Chuyển đổi dữ liệu để vẽ bằng Plotly
+                    # Plotly cần dữ liệu dạng "Long" để vẽ nhiều đường
+                    df_melted = df_lstm_res.melt(id_vars=['Date'], 
+                                                 value_vars=['Actual', 'Prediction'],
+                                                 var_name='Type', value_name='Price')
+                    
+                    fig_lstm = px.line(df_melted, x='Date', y='Price', color='Type',
+                                       title=f"Kết quả chạy thử nghiệm LSTM trên {target_bank}",
+                                       color_discrete_map={
+                                           "Actual": "#0068C9",  # Xanh (Thực tế)
+                                           "Prediction": "orange" # Cam (Dự báo)
+                                       })
+                    
+                    fig_lstm.update_traces(line=dict(width=2))
+                    fig_lstm.update_layout(xaxis_title="Ngày", yaxis_title="Giá", hovermode="x unified")
+                    
+                    st.plotly_chart(fig_lstm, use_container_width=True)
                 else:
-                    st.warning("Không tìm thấy file model_loss.json")
+                    st.warning("⚠️ Chưa tìm thấy file dữ liệu biểu đồ (lstm_result.csv). Hãy chạy lại Cell 8 trong notebook train.")
 
-            # --- THỰC HIỆN DỰ BÁO ---
-            with col_ai2:
-                st.subheader("🔮 Dự báo ngày tiếp theo")
-                
-                # Lấy dữ liệu 60 ngày gần nhất của mã đó để dự báo
-                # QUAN TRỌNG: time_step phải khớp với lúc bạn train mô hình (thường là 60)
-                time_step = 60 
-                
-                # Lấy dữ liệu giá đóng cửa (hoặc giá điều chỉnh tùy lúc train bạn dùng cột nào)
-                # Ở đây giả sử bạn train bằng cột Adj Close (Gia_Dieu_Chinh)
-                data_last_60 = df[target_bank].values[-time_step:]
-                
-                # Reshape và Scale dữ liệu
-                data_last_60 = data_last_60.reshape(-1, 1)
-                data_scaled = scaler.transform(data_last_60)
-                
-                # Reshape cho đúng input của LSTM (1, 60, 1)
-                X_input = data_scaled.reshape(1, time_step, 1)
-                
-                # Dự báo
-                pred_scaled = model.predict(X_input)
-                pred_price = scaler.inverse_transform(pred_scaled)[0][0]
-                
-                # Lấy giá ngày gần nhất để so sánh
-                last_price = df[target_bank].iloc[-1]
-                change = pred_price - last_price
-                pct_change = (change / last_price) * 100
-                
-                # Hiển thị kết quả kiểu số lớn (Metric)
-                st.metric(
-                    label=f"Giá dự báo ngày mai ({target_bank})",
-                    value=f"{pred_price:,.0f} VND",
-                    delta=f"{change:,.0f} VND ({pct_change:.2f}%)"
-                )
-                
-                st.write(f"Giá đóng cửa gần nhất: **{last_price:,.0f} VND**")
-                
-                if pct_change > 0:
-                    st.success("Mô hình dự báo: **TĂNG** 🚀")
-                else:
-                    st.error("Mô hình dự báo: **GIẢM** 📉")
-
-        except Exception as e:
-            st.error(f"Lỗi khi chạy mô hình: {e}")
-            st.warning("Gợi ý: Kiểm tra xem 'time_step' (số ngày lùi lại) trong code dashboard có khớp với lúc bạn train mô hình không?")
-            
-    else:
-        st.warning(f"⚠️ Chưa tìm thấy mô hình đã lưu cho mã **{target_bank}**.")
-        st.write(f"Vui lòng kiểm tra thư mục: `{model_folder}`")
-        st.write("Cấu trúc file cần thiết: `LSTM.h5`, `LSTM_scaler.pkl`")
+            except Exception as e:
+                st.error(f"Lỗi: {e}")
+        else:
+            st.warning(f"Chưa có model cho {target_bank}")
