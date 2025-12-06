@@ -270,7 +270,7 @@ with tab5:
     # 2. SUB-TAB LSTM (ĐÃ CẬP NHẬT: THÊM BIỂU ĐỒ)
     # =========================================================
     with sub_tab_lstm:
-        lstm_folder = f"Save_model_LMST/{target_bank}.VN"
+        lstm_folder = f"Save_model_LSMT/{target_bank}.VN"
         model_path = os.path.join(lstm_folder, "LSTM.h5")
         scaler_path = os.path.join(lstm_folder, "LSTM_scaler.pkl")
         loss_path = os.path.join(lstm_folder, "model_loss.json")
