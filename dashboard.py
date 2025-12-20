@@ -355,9 +355,21 @@ with tab5:
             m1, m2, m3, m4 = st.columns(4)
             
             # 3 Cột đầu: Chỉ số đánh giá
-            m1.metric("RMSE", f"{arima_metrics.get('RMSE', 0):.2f}")
-            m2.metric("MAE", f"{arima_metrics.get('MAE', 0):.2f}")
-            m3.metric("MAPE", f"{arima_metrics.get('MAPE', 0):.2f}%")
+            m1.metric(
+                "RMSE", 
+                f"{arima_metrics.get('RMSE', 0):.2f}",
+                help="Root Mean Squared Error: Sai số trung bình phương gốc.\n\nCàng THẤP càng tốt. Chỉ số này phạt nặng các sai số lớn (outliers)."
+            )
+            m2.metric(
+                "MAE", 
+                f"{arima_metrics.get('MAE', 0):.2f}",
+                help="Mean Absolute Error: Sai số tuyệt đối trung bình.\n\nCàng THẤP càng tốt. Cho biết trung bình mô hình lệch bao nhiêu VND so với thực tế."
+            )
+            m3.metric(
+                "MAPE", 
+                f"{arima_metrics.get('MAPE', 0):.2f}%",
+                help="Mean Absolute Percentage Error: Sai số phần trăm trung bình.\n\nCàng THẤP càng tốt. Ví dụ: 1.5% nghĩa là dự báo lệch khoảng 1.5% so với giá thật."
+            )
             
             # Cột 4: DỰ BÁO NGÀY MAI (Tính toán từ file CSV)
             try:
@@ -428,9 +440,21 @@ with tab5:
                 elif os.path.exists(old_loss_path):
                     with open(old_loss_path, 'r') as f: metrics = json.load(f).get("LSTM", {})
                 
-                m1.metric("R2 Score", f"{metrics.get('r2', 0):.4f}")
-                m2.metric("RMSE", f"{metrics.get('rmse', 0):,.0f}")
-                m3.metric("MAE", f"{metrics.get('mae', 0):,.0f}")
+                m1.metric(
+                    "R2 Score", 
+                    f"{metrics.get('r2', 0):.4f}",
+                    help="R-squared (Hệ số xác định).\n\nCàng gần 1 càng TỐT. Cho biết mô hình giải thích được bao nhiêu % sự biến thiên của dữ liệu."
+                )
+                m2.metric(
+                    "RMSE", 
+                    f"{metrics.get('rmse', 0):,.0f}",
+                    help="Root Mean Squared Error.\n\nCàng THẤP càng tốt. Sai số trung bình phương gốc (đơn vị: VND)."
+                )
+                m3.metric(
+                    "MAE", 
+                    f"{metrics.get('mae', 0):,.0f}",
+                    help="Mean Absolute Error.\n\nCàng THẤP càng tốt. Sai số tuyệt đối trung bình (đơn vị: VND)."
+                )
 
                 # Dự báo
                 last_60_days = df[target_bank].values[-60:].reshape(-1, 1)
