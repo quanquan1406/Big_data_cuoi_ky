@@ -333,7 +333,7 @@ with tab6:
         if st.button("📥 Tải Dữ liệu Mới (Raw)", use_container_width=True):
             with st.spinner('Đang kết nối API để tải dữ liệu... (Vui lòng chờ)'):
                 try:
-                    msg = etl_process.download_data() # Gọi hàm
+                    msg = data.download_data() # Gọi hàm
                     st.success(msg)
                     time.sleep(1)
                     st.rerun() # Load lại trang để nhận data mới
@@ -344,7 +344,7 @@ with tab6:
         if st.button("🧹 Làm sạch Dữ liệu (Clean)", use_container_width=True):
             with st.spinner('Đang xử lý Missing values & Outliers...'):
                 try:
-                    msg = etl_process.clean_data()
+                    msg = data.clean_data()
                     st.success(msg)
                 except Exception as e:
                     st.error(f"Lỗi: {e}")
