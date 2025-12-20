@@ -267,7 +267,7 @@ with tab5:
             st.info(f"Vui lòng chạy file train ARIMA để tạo folder: `{arima_folder}`")
 
     # =========================================================
-    # 2. SUB-TAB LSTM (ĐÃ CẬP NHẬT: THÊM BIỂU ĐỒ)
+    # 2. SUB-TAB LSTM 
     # =========================================================
     with sub_tab_lstm:
         lstm_folder = f"Save_model_LSMT/{target_bank}.VN"
@@ -317,7 +317,7 @@ with tab5:
                             delta=f"{change:,.0f} VND ({pct_change:.2f}%)"
                         )
 
-                # --- PHẦN 3: VẼ BIỂU ĐỒ (MỚI THÊM VÀO) ---
+                # --- PHẦN 3: VẼ BIỂU ĐỒ  ---
                 st.divider()
                 st.subheader("3. Biểu đồ Kiểm thử (Thực tế vs Dự báo)")
                 
