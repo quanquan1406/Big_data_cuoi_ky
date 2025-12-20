@@ -17,32 +17,40 @@ def get_data_dir():
     os.makedirs(data_directory, exist_ok=True)
     return data_directory
 
-def download_data():
+
+
+def download_data(custom_list=None):
     """
-    Hàm tải dữ liệu từ Yahoo Finance cho danh sách ngân hàng.
-    Trả về thông báo trạng thái (str).
+    Tải dữ liệu chứng khoán.
+    Args:
+        custom_list (list): Danh sách mã tùy chọn (VD: ['HPG.VN', 'FPT.VN']). 
+                            Nếu None thì tải danh sách mặc định BANK_STOCKS.
     """
     try:
         data_directory = get_data_dir()
-        start_date = dt.datetime.today() - dt.timedelta(5 * 365) # 5 năm
+        start_date = dt.datetime.today() - dt.timedelta(5 * 365)
         end_date = dt.datetime.today()
         
+        # LOGIC MỚI: Chọn danh sách để tải
+        if custom_list and len(custom_list) > 0:
+            stocks_to_download = custom_list
+            mode_msg = "danh sách tùy chọn"
+        else:
+            stocks_to_download = BANK_STOCKS
+            mode_msg = "danh sách mặc định (Ngân hàng)"
+            
         count_success = 0
+        print(f"⬇️ Bắt đầu tải {mode_msg} vào: {data_directory}")
         
-        print(f"Bắt đầu tải dữ liệu vào thư mục: {data_directory}")
-        
-        for stock in BANK_STOCKS:
+        for stock in stocks_to_download:
             try:
-                # Tải dữ liệu
-                # auto_adjust=True để lấy giá đã điều chỉnh cổ tức/chia tách
+                # Tải data
                 data = yf.download(stock, start=start_date, end=end_date, progress=False)
                 
                 if not data.empty:
                     data.reset_index(inplace=True)
-                    
-                    # Fix lỗi yfinance version mới: Đôi khi column là MultiIndex
                     if isinstance(data.columns, pd.MultiIndex):
-                        data.columns = data.columns.droplevel(1)  # Bỏ level 'Ticker' thừa nếu có
+                        data.columns = data.columns.droplevel(1)
 
                     csv_file_path = os.path.join(data_directory, f'{stock}.csv')
                     data.to_csv(csv_file_path, index=False)
@@ -51,10 +59,10 @@ def download_data():
                 print(f"Lỗi tải mã {stock}: {e}")
                 continue
 
-        return f"✅ Đã tải thành công {count_success}/{len(BANK_STOCKS)} mã ngân hàng vào thư mục '{DATA_DIR_NAME}'."
+        return f"✅ Đã tải thành công {count_success} mã ({mode_msg})."
     
     except Exception as e:
-        return f"❌ Lỗi nghiêm trọng khi tải dữ liệu: {str(e)}"
+        return f"❌ Lỗi nghiêm trọng: {str(e)}"
 
 def _clean_single_csv(csv_path, overwrite=True):
     """
