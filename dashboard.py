@@ -9,6 +9,10 @@ from tensorflow.keras.models import load_model
 import joblib
 import json
 import numpy as np
+import data
+import train_arima
+import train_lstm
+import time
 # -----------------------------------------------------------
 # 1. CẤU HÌNH & HÀM TẢI DỮ LIỆU
 # -----------------------------------------------------------
@@ -86,12 +90,13 @@ df_returns = df_filtered.pct_change().dropna()
 # -----------------------------------------------------------
 # 3. GIAO DIỆN CHÍNH (CÁC TAB)
 # -----------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Xu hướng & Hiệu suất", 
     "📅 Phân tích Chu kỳ (Mới)", 
     "⚠️ Rủi ro & Biến động", 
     "🎯 Tương quan & Ranking",
-    "🔮 Dự báo tương lai"
+    "🔮 Dự báo tương lai",
+    "⚙️ Control Panel"
 ])
 
 # --- TAB 1: XU HƯỚNG & HIỆU SUẤT ---
@@ -211,141 +216,168 @@ with tab4:
 with tab5:
     st.header("🔮 So sánh Mô hình Dự báo")
     
-    target_bank = selected_banks[0]
+    target_bank = selected_banks[0] # Lấy ngân hàng đầu tiên trong danh sách chọn
     st.caption(f"Đang hiển thị dữ liệu dự báo cho: **{target_bank}**")
 
-    # Tạo 2 tab con bên trong Tab 5
+    # Tạo 2 tab con
     sub_tab_arima, sub_tab_lstm = st.tabs(["📈 ARIMA (Thống kê)", "🧠 LSTM (Deep Learning)"])
 
     # =========================================================
     # 1. SUB-TAB ARIMA
     # =========================================================
     with sub_tab_arima:
-        # Đường dẫn folder ARIMA (Lưu ý: Tên folder phải khớp với lúc bạn train)
-        # Giả sử bạn lưu ở Save_model_ARIMA/ACB.VN
         arima_folder = f"Save_model_ARIMA/{target_bank}.VN"
-        
         csv_path = os.path.join(arima_folder, "dashboard_data.csv")
         metrics_path = os.path.join(arima_folder, "metrics.json")
         
-        # Kiểm tra file tồn tại
         if os.path.exists(csv_path) and os.path.exists(metrics_path):
-            
-            # --- PHẦN 1: HIỂN THỊ METRICS (CHỈ SỐ ĐÁNH GIÁ) ---
+            # Load Metrics
             with open(metrics_path, 'r') as f:
                 arima_metrics = json.load(f)
             
-            st.subheader("1. Độ chính xác mô hình (Trên tập Test)")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("RMSE (Sai số chuẩn)", arima_metrics.get("RMSE", 0))
-            m2.metric("MAE (Sai số tuyệt đối)", arima_metrics.get("MAE", 0))
-            m3.metric("MAPE (Sai số %)", f"{arima_metrics.get('MAPE', 0)}%")
+            st.subheader("1. Độ chính xác (Test Set)")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("RMSE", f"{arima_metrics.get('RMSE', 0):.2f}")
+            c2.metric("MAE", f"{arima_metrics.get('MAE', 0):.2f}")
+            c3.metric("MAPE", f"{arima_metrics.get('MAPE', 0):.2f}%")
             
-            # --- PHẦN 2: BIỂU ĐỒ DỰ BÁO ---
-            st.subheader("2. Biểu đồ Dự báo Xu hướng")
-            
-            # Đọc file CSV đã chuẩn bị sẵn (Gồm cả History và Forecast)
+            # Load Data & Plot
             df_arima = pd.read_csv(csv_path)
-            
-            # Vẽ bằng Plotly để đẹp hơn
+            st.subheader("2. Biểu đồ Dự báo")
             fig_arima = px.line(df_arima, x='Date', y='Close', color='Type',
-                                title=f"Dự báo ARIMA cho {target_bank} (30 ngày tới)",
-                                color_discrete_map={"History": "light blue", "Forecast": "red"})
-            
-            fig_arima.update_traces(line=dict(width=2))
-            fig_arima.update_layout(xaxis_title="Ngày", yaxis_title="Giá (VND)", hovermode="x unified")
-            
+                                title=f"Dự báo ARIMA - {target_bank}",
+                                color_discrete_map={"History": "#A6CEE3", "Forecast": "#E31A1C"})
             st.plotly_chart(fig_arima, use_container_width=True)
-            
-            # --- PHẦN 3: BẢNG GIÁ DỰ KIẾN ---
-            with st.expander("Xem chi tiết giá dự báo 5 ngày tới"):
-                df_future_only = df_arima[df_arima['Type'] == 'Forecast'].head(5)
-                st.dataframe(df_future_only[['Date', 'Close']].set_index('Date'))
-                
         else:
-            st.warning(f"⚠️ Chưa tìm thấy dữ liệu ARIMA cho **{target_bank}**.")
-            st.info(f"Vui lòng chạy file train ARIMA để tạo folder: `{arima_folder}`")
+            st.warning(f"⚠️ Chưa có dữ liệu ARIMA cho {target_bank}. Hãy kiểm tra thư mục: {arima_folder}")
 
     # =========================================================
-    # 2. SUB-TAB LSTM 
+    # 2. SUB-TAB LSTM (Đã sửa lỗi Typo & Caching)
     # =========================================================
     with sub_tab_lstm:
-        lstm_folder = f"Save_model_LSMT/{target_bank}.VN"
+        # SỬA LỖI TYPO: LSMT -> LSTM
+        lstm_folder = f"Save_model_LSTM/{target_bank}.VN" 
+        
         model_path = os.path.join(lstm_folder, "LSTM.h5")
         scaler_path = os.path.join(lstm_folder, "LSTM_scaler.pkl")
         loss_path = os.path.join(lstm_folder, "model_loss.json")
-        result_csv_path = os.path.join(lstm_folder, "lstm_result.csv") # File dữ liệu mới
-        
+        result_csv_path = os.path.join(lstm_folder, "lstm_result.csv")
+
+        # Kiểm tra file trước khi load
         if os.path.exists(model_path) and os.path.exists(scaler_path):
             try:
-                # Load các file cần thiết
+                # Load model (Nên dùng caching nếu có thể, ở đây load trực tiếp)
                 model = load_model(model_path)
                 scaler = joblib.load(scaler_path)
                 
-                # --- PHẦN 1: METRICS & DỰ BÁO ---
-                col_lstm1, col_lstm2 = st.columns([1, 1])
-                
-                with col_lstm1:
-                    st.subheader("1. Hiệu quả mô hình")
+                # 1. Hiển thị Metrics
+                col_m, col_p = st.columns(2)
+                with col_m:
+                    st.subheader("1. Đánh giá Model")
                     if os.path.exists(loss_path):
                         with open(loss_path, 'r') as f:
-                            metrics_data = json.load(f)
-                        if "LSTM" in metrics_data:
-                            data = metrics_data["LSTM"]
-                            m1, m2, m3 = st.columns(3)
-                            m1.metric("R2 Score", f"{data.get('r2', 0):.4f}")
-                            m2.metric("RMSE", f"{data.get('rmse', 0):.0f}")
-                            m3.metric("MAE", f"{data.get('mae', 0):.0f}")
-                
-                with col_lstm2:
-                    st.subheader("2. Dự báo ngày mai")
-                    # (Code dự báo giữ nguyên như cũ)
-                    time_step = 60
-                    if target_bank in df.columns:
-                        data_last_60 = df[target_bank].values[-time_step:].reshape(-1, 1)
-                        data_scaled = scaler.transform(data_last_60)
-                        X_input = data_scaled.reshape(1, time_step, 1)
-                        pred_scaled = model.predict(X_input)
-                        pred_price = scaler.inverse_transform(pred_scaled)[0][0]
-                        last_price = df[target_bank].iloc[-1]
-                        change = pred_price - last_price
-                        pct_change = (change / last_price) * 100
-                        
-                        st.metric(
-                            label="Giá dự kiến",
-                            value=f"{pred_price:,.0f} VND",
-                            delta=f"{change:,.0f} VND ({pct_change:.2f}%)"
-                        )
+                            metrics = json.load(f).get("LSTM", {})
+                        st.write(f"**R2 Score:** {metrics.get('r2', 'N/A')}")
+                        st.write(f"**RMSE:** {metrics.get('rmse', 'N/A')}")
+                    else:
+                        st.info("Không tìm thấy file metrics.")
 
-                # --- PHẦN 3: VẼ BIỂU ĐỒ  ---
-                st.divider()
-                st.subheader("3. Biểu đồ Kiểm thử (Thực tế vs Dự báo)")
-                
+                # 2. Dự báo ngày tiếp theo
+                with col_p:
+                    st.subheader("2. Dự báo ngày mai")
+                    # Lấy 60 ngày cuối từ dữ liệu gốc
+                    if target_bank in df.columns:
+                        last_60_days = df[target_bank].values[-60:].reshape(-1, 1)
+                        last_60_scaled = scaler.transform(last_60_days)
+                        X_test = last_60_scaled.reshape(1, 60, 1)
+                        
+                        pred_scaled = model.predict(X_test)
+                        pred_price = scaler.inverse_transform(pred_scaled)[0][0]
+                        current_price = df[target_bank].iloc[-1]
+                        
+                        delta = pred_price - current_price
+                        st.metric("Giá dự kiến", f"{pred_price:,.0f} VND", f"{delta:,.0f} VND")
+
+                # 3. Vẽ biểu đồ so sánh (Actual vs Predict)
+                st.subheader("3. Kết quả chạy thực nghiệm")
                 if os.path.exists(result_csv_path):
-                    # Đọc file CSV mà Cell 8 vừa tạo
-                    df_lstm_res = pd.read_csv(result_csv_path)
+                    df_res = pd.read_csv(result_csv_path)
+                    # Melt data cho Plotly
+                    df_melt = df_res.melt(id_vars='Date', value_vars=['Actual', 'Prediction'], 
+                                          var_name='Legend', value_name='Price')
                     
-                    # Chuyển đổi dữ liệu để vẽ bằng Plotly
-                    # Plotly cần dữ liệu dạng "Long" để vẽ nhiều đường
-                    df_melted = df_lstm_res.melt(id_vars=['Date'], 
-                                                 value_vars=['Actual', 'Prediction'],
-                                                 var_name='Type', value_name='Price')
-                    
-                    fig_lstm = px.line(df_melted, x='Date', y='Price', color='Type',
-                                       title=f"Kết quả chạy thử nghiệm LSTM trên {target_bank}",
-                                       color_discrete_map={
-                                           "Actual": "#0068C9",  # Xanh (Thực tế)
-                                           "Prediction": "orange" # Cam (Dự báo)
-                                       })
-                    
-                    fig_lstm.update_traces(line=dict(width=2))
-                    fig_lstm.update_layout(xaxis_title="Ngày", yaxis_title="Giá", hovermode="x unified")
-                    
+                    fig_lstm = px.line(df_melt, x='Date', y='Price', color='Legend',
+                                       color_discrete_map={"Actual": "gray", "Prediction": "#00CC96"})
                     st.plotly_chart(fig_lstm, use_container_width=True)
                 else:
-                    st.warning("⚠️ Chưa tìm thấy file dữ liệu biểu đồ (lstm_result.csv). Hãy chạy lại Cell 8 trong notebook train.")
+                    st.warning("Chưa có file kết quả test (lstm_result.csv).")
 
             except Exception as e:
-                st.error(f"Lỗi: {e}")
+                st.error(f"Lỗi khi chạy model LSTM: {e}")
         else:
-            st.warning(f"Chưa có model cho {target_bank}")
+            st.info(f"⚠️ Chưa train model LSTM cho mã {target_bank}")
+
+
+# --- TAB 6: CONTROL PANEL ---
+with tab6:
+    st.header("⚙️ Hệ thống Quản trị Dữ liệu & Mô hình")
+    
+    col1, col2 = st.columns(2)
+    
+    # --- CỘT 1: DỮ LIỆU ---
+    with col1:
+        st.subheader("1. Cập nhật Dữ liệu")
+        st.info("Nhấn nút bên dưới để tải dữ liệu mới nhất từ thị trường và làm sạch.")
+        
+        # Nút Tải Data
+        if st.button("📥 Tải Dữ liệu Mới (Raw)", use_container_width=True):
+            with st.spinner('Đang kết nối API để tải dữ liệu... (Vui lòng chờ)'):
+                try:
+                    msg = etl_process.download_data() # Gọi hàm
+                    st.success(msg)
+                    time.sleep(1)
+                    st.rerun() # Load lại trang để nhận data mới
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
+
+        # Nút Làm sạch Data
+        if st.button("🧹 Làm sạch Dữ liệu (Clean)", use_container_width=True):
+            with st.spinner('Đang xử lý Missing values & Outliers...'):
+                try:
+                    msg = etl_process.clean_data()
+                    st.success(msg)
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
+
+    # --- CỘT 2: HUẤN LUYỆN MODEL ---
+    with col2:
+        st.subheader("2. Huấn luyện Mô hình (Retrain)")
+        st.warning("⚠️ Lưu ý: Việc train model tốn nhiều tài nguyên và thời gian (đặc biệt là LSTM).")
+        
+        # Chọn mã để train lại (tránh train hết tất cả sẽ rất lâu)
+        bank_to_train = st.selectbox("Chọn mã cổ phiếu cần Train lại:", all_banks)
+        
+        # Nút Train ARIMA
+        if st.button(f"📈 Train ARIMA cho {bank_to_train}", use_container_width=True):
+            with st.status(f"Đang train ARIMA cho {bank_to_train}...", expanded=True) as status:
+                st.write("Đang đọc dữ liệu và tìm tham số tối ưu...")
+                try:
+                    # GỌI HÀM TỪ FILE train_arima.py
+                    res = train_arima.train_arima_model(bank_to_train) 
+                    
+                    status.update(label="Hoàn tất!", state="complete", expanded=False)
+                    st.success(res)
+                except Exception as e:
+                    status.update(label="Lỗi!", state="error")
+                    st.error(f"Chi tiết: {e}")
+
+        # Nút Train LSTM
+        if st.button(f"🧠 Train LSTM cho {bank_to_train}", use_container_width=True):
+            with st.spinner('Đang khởi tạo TensorFlow và huấn luyện (Mất khoảng 1-2 phút)...'):
+                try:
+                    # GỌI HÀM TỪ FILE train_lstm.py
+                    res = train_lstm.train_lstm_model(bank_to_train)
+                    
+                    st.success(res)
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
