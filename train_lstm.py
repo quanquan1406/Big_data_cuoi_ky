@@ -10,45 +10,47 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.backend import clear_session
 
-# --- CẤU HÌNH ---
 DATA_DIR = 'data'
 SAVE_DIR_ROOT = 'Save_model_LSTM'
-PAST_RANGE = 60  # Time step
+PAST_RANGE = 60
 
 def train_lstm_model(ticker):
-    """
-    Huấn luyện model LSTM.
-    """
-    clear_session() # Quan trọng: Xóa rác bộ nhớ cũ
+    clear_session()
     try:
+        # --- CHUẨN HÓA TÊN MÃ ---
+        ticker = ticker.strip().upper()
+        if not ticker.endswith('.VN'):
+            ticker = f"{ticker}.VN"
+
         print(f"🔄 Đang bắt đầu train LSTM cho {ticker}...")
         
-        # 1. Setup đường dẫn
+        # --- KIỂM TRA DATA TRƯỚC ---
         data_path = os.path.join(DATA_DIR, f"{ticker}.csv")
+        
+        if not os.path.exists(data_path):
+            return f"❌ Lỗi: Không tìm thấy file data tại {data_path}"
+
+        stock = pd.read_csv(data_path)
+        if 'Date' in stock.columns:
+            stock['Date'] = pd.to_datetime(stock['Date'])
+            stock.set_index('Date', inplace=True)
+        stock.sort_index(ascending=True, inplace=True)
+        
+        if len(stock) < PAST_RANGE + 10:
+             return "❌ Dữ liệu quá ít để train LSTM."
+
+        # --- CHỈ TẠO THƯ MỤC KHI ĐÃ CÓ DATA ---
         stock_model_dir = os.path.join(SAVE_DIR_ROOT, ticker)
         os.makedirs(stock_model_dir, exist_ok=True)
 
-        if not os.path.exists(data_path):
-            return f"❌ Không tìm thấy dữ liệu: {data_path}"
-
-        # 2. Load Data
-        stock = pd.read_csv(data_path)
-        col_date = 'Date' if 'Date' in stock.columns else 'Ngay'
-        stock[col_date] = pd.to_datetime(stock[col_date])
-        stock.set_index(col_date, inplace=True)
-        stock.sort_index(ascending=True, inplace=True)
-        
+        # (Phần xử lý logic LSTM bên dưới giữ nguyên như cũ...)
         stock_lstm = stock[['Close']].copy()
         dataset = stock_lstm.values
 
-        # 3. Scale Data
         scaler = MinMaxScaler(feature_range=(0, 1))
         scaled_data = scaler.fit_transform(dataset)
-        
-        # Lưu Scaler ngay
-        joblib.dump(scaler, os.path.join(stock_model_dir, "LSTM_scaler.pkl"))
+        joblib.dump(scaler, os.path.join(stock_model_dir, "lstm.pkl"))
 
-        # 4. Prepare Train Data
         training_data_len = int(len(dataset) * 0.8)
         train = dataset[0:training_data_len, :]
         valid = dataset[training_data_len:, :]
@@ -61,19 +63,16 @@ def train_lstm_model(ticker):
         x_train, y_train = np.array(x_train), np.array(y_train)
         x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 
-        # 5. Build & Train Model
         model = Sequential()
         model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
         model.add(LSTM(units=50))
         model.add(Dense(1))
 
         model.compile(loss='mean_squared_error', optimizer='adam')
-        model.fit(x_train, y_train, epochs=10, batch_size=32, verbose=0) # verbose=0 để ẩn log
+        model.fit(x_train, y_train, epochs=10, batch_size=32, verbose=0)
 
-        # Lưu Model
-        model.save(os.path.join(stock_model_dir, "LSTM.h5"))
+        model.save(os.path.join(stock_model_dir, "lstm.h5"))
 
-        # 6. Evaluate & Save Results
         inputs = stock_lstm[len(stock_lstm) - len(valid) - PAST_RANGE:].values
         inputs = inputs.reshape(-1, 1)
         inputs = scaler.transform(inputs)
@@ -92,23 +91,22 @@ def train_lstm_model(ticker):
         mae = mean_absolute_error(y_valid, preds)
         r2 = r2_score(y_valid, preds)
 
-        # Lưu Metrics json
         loss_detail = {"rmse": float(rmse), "mae": float(mae), "r2": float(r2)}
-        metrics_path = os.path.join(stock_model_dir, "model_loss.json")
+        metrics_path = os.path.join(stock_model_dir, "lstm.json")
         
         full_metrics = {}
         if os.path.exists(metrics_path):
-            with open(metrics_path, 'r') as f:
-                full_metrics = json.load(f)
+            try:
+                with open(metrics_path, 'r') as f: full_metrics = json.load(f)
+            except: pass
         
         full_metrics["LSTM"] = loss_detail
         with open(metrics_path, 'w') as f:
             json.dump(full_metrics, f, indent=4)
 
-        # Lưu CSV kết quả
         result_df = pd.DataFrame({'Actual': y_valid.flatten(), 'Prediction': preds.flatten()})
         result_df['Date'] = stock_lstm.index[training_data_len:]
-        result_df.to_csv(os.path.join(stock_model_dir, "lstm_result.csv"), index=False)
+        result_df.to_csv(os.path.join(stock_model_dir, "lstm.csv"), index=False)
 
         return f"✅ Đã train xong LSTM cho {ticker}. R2 Score: {r2:.4f}"
 

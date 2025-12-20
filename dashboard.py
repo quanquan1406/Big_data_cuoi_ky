@@ -9,7 +9,7 @@ from tensorflow.keras.models import load_model
 import joblib
 import json
 import numpy as np
-import data
+import data as dt_process
 import train_arima
 import train_lstm
 import time
@@ -227,8 +227,8 @@ with tab5:
     # =========================================================
     with sub_tab_arima:
         arima_folder = f"Save_model_ARIMA/{target_bank}.VN"
-        csv_path = os.path.join(arima_folder, "dashboard_data.csv")
-        metrics_path = os.path.join(arima_folder, "metrics.json")
+        csv_path = os.path.join(arima_folder, "arima.csv")
+        metrics_path = os.path.join(arima_folder, "arima.json")
         
         if os.path.exists(csv_path) and os.path.exists(metrics_path):
             # Load Metrics
@@ -252,16 +252,16 @@ with tab5:
             st.warning(f"⚠️ Chưa có dữ liệu ARIMA cho {target_bank}. Hãy kiểm tra thư mục: {arima_folder}")
 
     # =========================================================
-    # 2. SUB-TAB LSTM (Đã sửa lỗi Typo & Caching)
+    # 2. SUB-TAB LSTM 
     # =========================================================
     with sub_tab_lstm:
         # SỬA LỖI TYPO: LSMT -> LSTM
         lstm_folder = f"Save_model_LSTM/{target_bank}.VN" 
         
-        model_path = os.path.join(lstm_folder, "LSTM.h5")
-        scaler_path = os.path.join(lstm_folder, "LSTM_scaler.pkl")
-        loss_path = os.path.join(lstm_folder, "model_loss.json")
-        result_csv_path = os.path.join(lstm_folder, "lstm_result.csv")
+        model_path = os.path.join(lstm_folder, "lstm.h5")
+        scaler_path = os.path.join(lstm_folder, "lstm.pkl")
+        loss_path = os.path.join(lstm_folder, "lstm.json")
+        result_csv_path = os.path.join(lstm_folder, "lstm.csv")
 
         # Kiểm tra file trước khi load
         if os.path.exists(model_path) and os.path.exists(scaler_path):
@@ -333,7 +333,7 @@ with tab6:
         if st.button("📥 Tải Dữ liệu Mới (Raw)", use_container_width=True):
             with st.spinner('Đang kết nối API để tải dữ liệu... (Vui lòng chờ)'):
                 try:
-                    msg = data.download_data() # Gọi hàm
+                    msg = dt_process.download_data() # Gọi hàm
                     st.success(msg)
                     time.sleep(1)
                     st.rerun() # Load lại trang để nhận data mới
@@ -344,7 +344,7 @@ with tab6:
         if st.button("🧹 Làm sạch Dữ liệu (Clean)", use_container_width=True):
             with st.spinner('Đang xử lý Missing values & Outliers...'):
                 try:
-                    msg = data.clean_data()
+                    msg = dt_process.clean_data()
                     st.success(msg)
                 except Exception as e:
                     st.error(f"Lỗi: {e}")
